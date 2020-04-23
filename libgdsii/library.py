@@ -1,17 +1,16 @@
 from __future__ import annotations
 import typing
 
-if typing.TYPE_CHECKING:
-    import utils
-
 import struct
 import io
 import collections
 import warnings
+import numpy as np
 
 import libgdsii.gdstypes as gdstypes
 import libgdsii.records as records
 import libgdsii.exceptions as exceptions
+import libgdsii.utils as utils
 
 
 class Library(collections.OrderedDict):
@@ -22,7 +21,7 @@ class Library(collections.OrderedDict):
     """
 
     _HEADER: records.HEADER
-    _BGNLIB: records.BGBLIB
+    _BGNLIB: records.BGNLIB
     _LIBNAME: records.LIBNAME
     _UNITS: records.UNITS
     _ENDLIB: records.ENDLIB
@@ -36,12 +35,27 @@ class Library(collections.OrderedDict):
     _GENERATIONS = None
     _FormatType = None
 
+    def __init__(self,
+                 name: str,
+                 logical_unit: float = 0.001,
+                 physical_unit: float = 1e-9,
+                 version: gdstypes.Version = gdstypes.Version.SEVEN,
+                 mod_date: utils.DateTime = utils.DateTime.utcnow(),
+                 acc_date: utils.DateTime = utils.DateTime.utcnow()
+                 ):
+        super().__init__()
+        self._HEADER = records.HEADER(version)
+        self._BGNLIB = records.BGNLIB(mod_date, acc_date)
+        self._LIBNAME = records.LIBNAME(name)
+        self._UNITS = records.UNITS(logical_unit, physical_unit)
+        self._ENDLIB = records.ENDLIB()
+
     @property
     def version(self):
         return self._HEADER.version
 
     @version.setter
-    def version(self, version: records.HEADER.Version):
+    def version(self, version: gdstypes.Version):
         self._HEADER.version = version
 
     @property
@@ -94,7 +108,7 @@ class Library(collections.OrderedDict):
         # read header (required)
         self._HEADER = records.HEADER.read(reader.read_next())
         # read begin of library (required)
-        self._BGNLIB = records.BGBLIB.read(reader.read_next())
+        self._BGNLIB = records.BGNLIB.read(reader.read_next())
 
         # read optional records
         record = reader.read_next()
@@ -182,6 +196,16 @@ class Structure(list):
     _ENDSTR: records.ENDSTR
 
     _STRCLASS: records.Record = None
+
+    def __init__(self,
+                 name: str,
+                 mod_date: utils.DateTime = utils.DateTime.utcnow(),
+                 acc_date: utils.DateTime = utils.DateTime.utcnow()
+                 ):
+        super().__init__()
+        self._BGNSTR = records.BGNSTR(mod_date, acc_date)
+        self._STRNAME = records.STRNAME(name)
+        self._ENDSTR = records.ENDSTR()
 
     @property
     def modification_date(self):
@@ -305,6 +329,19 @@ class BoundaryElement(Element):
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
 
+    def __init__(self,
+                 layer: int,
+                 xy: np.ndarray[int],
+                 data_type: gdstypes.DataType = gdstypes.DataType.NO_DATA_PRESENT):
+        super().__init__()
+
+        self._BOUNDARY = records.BOUNDARY()
+        self._LAYER = records.LAYER(layer)
+        self._DATATYPE = records.DATATYPE(data_type)
+        self._XY = records.XY()
+        self.coordinates = xy
+        self._ENDEL = records.ENDEL()
+
     @property
     def layer(self):
         return self._LAYER.layer
@@ -326,11 +363,10 @@ class BoundaryElement(Element):
         return self._XY.x.copy(), self._XY.y.copy()
 
     @coordinates.setter
-    def coordinates(self, value: typing.Tuple[typing.List[int], typing.List[int]]):
-        x, y = value
-        if len(x) != len(y) or len(x) < 4 or value[0] != value[-1]: raise RuntimeError()
-        self._XY.x = x
-        self._XY.y = y
+    def coordinates(self, xy: np.ndarray[int]):
+        if xy.shape[0] < 4 or xy.shape[1] != 2 or xy[0, :] != xy[-1, :]: raise RuntimeError()
+        self._XY.x = xy[:, 0].copy()
+        self._XY.y = xy[:, 1].copy()
 
     @classmethod
     def read(cls, reader: Reader) -> BoundaryElement:
@@ -382,6 +418,23 @@ class PathElement(Element):
     _BGNEXTN: records.Record = None
     _ENDEXTN: records.Record = None
 
+    def __init__(self,
+                 layer: int,
+                 xy: np.ndarray[int],
+                 width: int = 0,
+                 pathtype: int = 0,
+                 datatype: gdstypes.DataType = gdstypes.DataType.NO_DATA_PRESENT):
+        super().__init__()
+
+        self._PATH = records.PATH()
+        self._LAYER = records.LAYER(layer)
+        self._XY = records.XY()
+        self.coordinates = xy
+        if width != 0: self._WIDTH = records.WIDTH(width)
+        if pathtype != 0: self._PATHTYPE = records.PATHTYPE(pathtype)
+        self._DATATYPE = records.DATATYPE(datatype)
+        self._ENDEL = records.ENDEL()
+
     @property
     def layer(self):
         return self._LAYER.layer
@@ -403,11 +456,10 @@ class PathElement(Element):
         return self._XY.x.copy(), self._XY.y.copy()
 
     @coordinates.setter
-    def coordinates(self, value: typing.Tuple[typing.List[int], typing.List[int]]):
-        x, y = value
-        if len(x) != len(y) or len(x) < 2: raise RuntimeError()
-        self._XY.x = x
-        self._XY.y = y
+    def coordinates(self, xy: np.ndarray[int]):
+        if xy.shape[0] < 2 or xy.shape[1] != 2: raise RuntimeError()
+        self._XY.x = xy[:, 0].copy()
+        self._XY.y = xy[:, 1].copy()
 
     @property
     def pathtype(self):
@@ -432,6 +484,7 @@ class PathElement(Element):
 
     @width.setter
     def width(self, width: int):
+        if width == 0: return
         try:
             self._WIDTH.width = width
         except AttributeError:
@@ -503,6 +556,22 @@ class RaithCircleElement(Element):
 
     _WIDTH: records.WIDTH = None
 
+    def __init__(self,
+                 layer: int,
+                 radii: typing.Tuple[int, int],
+                 center: typing.Tuple[int, int],
+                 width: int = 0,
+                 datatype: gdstypes.DataType = gdstypes.DataType.NO_DATA_PRESENT):
+        super().__init__()
+        self._RAITHCIRCLE = records.RaithCircle()
+        self._LAYER = records.LAYER(layer)
+        self._XY = records.XY()
+        self.radii = radii
+        self.center = center
+        if width != 0: self._WIDTH = records.WIDTH(width)
+        self._DATATYPE = records.DATATYPE(datatype)
+        self._ENDEL = records.ENDEL()
+
     @property
     def layer(self):
         return self._LAYER.layer
@@ -525,6 +594,13 @@ class RaithCircleElement(Element):
             return self._WIDTH.width
         except AttributeError:
             return 0
+
+    @width.setter
+    def width(self, width: int):
+        try:
+            self._WIDTH.width = width
+        except AttributeError:
+            self._WIDTH = records.WIDTH(width)
 
     @property
     def center(self):
@@ -567,13 +643,6 @@ class RaithCircleElement(Element):
     @property
     def is_arc(self):
         return bool(self._XY.y[3] & 1 << 2)
-
-    @width.setter
-    def width(self, width: int):
-        try:
-            self._WIDTH.width = width
-        except AttributeError:
-            self._WIDTH = records.WIDTH(width)
 
     @classmethod
     def read(cls, reader: Reader) -> RaithCircleElement:
@@ -627,6 +696,15 @@ class StructureReferenceElement(Element):
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
     _TRANSFORMATION: StructureTransformationElement = None
+
+    def __init__(self,
+                 refname: str,
+                 xy: typing.Tuple[int, int]):
+        super().__init__()
+        self._SREF = records.SREF()
+        self._SNAME = records.SNAME(refname)
+        self._XY = records.XY()
+        self.coordinates = xy
 
     @property
     def ref_name(self):
@@ -697,6 +775,20 @@ class ArrayReferenceElement(Element):
     _PLEX: records.PLEX = None
     _TRANSFORMATION: StructureTransformationElement = None
 
+    def __init__(self,
+                 refname: str,
+                 reference_point: typing.Tuple[int, int],
+                 dimensions: typing.Tuple[int, int],
+                 row_spacing: typing.Tuple[int, int],
+                 col_spacing: typing.Tuple[int, int]):
+        super().__init__()
+        self._AREF = records.AREF()
+        self._SNAME = records.SNAME(refname)
+        self._COLROW = records.COLROW(*dimensions)
+        self._XY = records.XY()
+        self.coordinates = np.c_[reference_point, np.array(col_spacing) * dimensions[1], np.array(row_spacing) * dimensions[0]].T
+        self._ENDEL = records.ENDEL()
+
     @property
     def ref_name(self):
         return self._SNAME.name
@@ -710,11 +802,10 @@ class ArrayReferenceElement(Element):
         return self._XY.x.copy(), self._XY.y.copy()
 
     @coordinates.setter
-    def coordinates(self, value: typing.Tuple[typing.List[int], typing.List[int]]):
-        x, y = value
-        if len(x) != len(y) or len(x) != 3: RuntimeError()
-        self._XY.x = x
-        self._XY.y = y
+    def coordinates(self, xy: np.ndarray[int]):
+        if xy.shape[0] != 3 or xy.shape[1] != 2: RuntimeError()
+        self._XY.x = xy[:, 0].copy()
+        self._XY.y = xy[:, 1].copy()
 
     @property
     def dimensions(self):
@@ -759,7 +850,7 @@ class ArrayReferenceElement(Element):
         self._ELFLAGS.write(stream) if self._ELFLAGS is not None else None
         self._PLEX.write(stream) if self._PLEX is not None else None
         self._SNAME.write(stream)
-        self._TRANSFORMATION.write() if self._TRANSFORMATION is not None else None
+        self._TRANSFORMATION.write(stream) if self._TRANSFORMATION is not None else None
         self._COLROW.write(stream)
         self._XY.write(stream)
         super().write(stream)
@@ -767,15 +858,26 @@ class ArrayReferenceElement(Element):
 
 class TextElement(Element):
     """
-    TEXT [ELFLAGS] [PLEX] LAYER <textbody> {<property>}* ENDEL
+    TEXT [ELFLAGS] [PLEX] LAYER <textbody> ENDEL
     """
 
-    _TEXT: records.Text
+    _TEXT: records.TEXT
     _LAYER: records.LAYER
     _TEXTBODY: TextElement.TextBody
 
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
+
+    def __init__(self,
+                 text: str,
+                 layer: int,
+                 xy: typing.Tuple[int, int]
+                 ):
+        super().__init__()
+        self._TEXT = records.TEXT()
+        self._LAYER = records.LAYER(layer)
+        self._TEXTBODY = TextElement.TextBody(text, xy)
+        self._ENDEL = records.ENDEL()
 
     @property
     def layer(self):
@@ -787,61 +889,47 @@ class TextElement(Element):
 
     @property
     def text(self):
-        return self._TEXTBODY._STRING.text
+        return self._TEXTBODY.text
 
     @text.setter
     def text(self, text: str):
-        self._TEXTBODY._STRING.text = text
+        self._TEXTBODY.text = text
 
     @property
     def coordinates(self):
-        return self._TEXTBODY._XY.x[0], self._TEXTBODY._XY.y[0]
+        return self._TEXTBODY.coordinates
 
     @coordinates.setter
-    def coordinates(self, value: typing.Tuple[int, int]):
-        x, y = value
-        self._TEXTBODY._XY.x = [x]
-        self._TEXTBODY._XY.y = [y]
+    def coordinates(self, xy: typing.Tuple[int, int]):
+        self._TEXTBODY.coordinates = xy
 
     @property
     def pathtype(self):
-        try:
-            return self._TEXTBODY._PATHTYPE.type
-        except AttributeError:
-            return 0
+        return self._TEXTBODY.pathtype
 
     @pathtype.setter
     def pathtype(self, path_type: int):
-        try:
-            self._TEXTBODY._PATHTYPE.type = path_type
-        except AttributeError:
-            self._TEXTBODY._PATHTYPE = records.PATHTYPE(path_type)
+        self._TEXTBODY.pathtype = path_type
 
     @property
     def width(self):
-        try:
-            return self._TEXTBODY._WIDTH.width
-        except AttributeError:
-            return 0
+        return self._TEXTBODY.width
 
     @width.setter
     def width(self, width: int):
-        try:
-            self._TEXTBODY._WIDTH.width = width
-        except AttributeError:
-            self._TEXTBODY._WIDTH = records.WIDTH(width)
+        self._TEXTBODY.width = width
 
     @property
     def vertical_alignment(self):
-        return self._TEXTBODY._PRESENTATION.vertical_alignment
+        return self._TEXTBODY.vertical_alignment
 
     @property
     def horizontal_alignment(self):
-        return self._TEXTBODY._PRESENTATION.horizontal_alignment
+        return self._TEXTBODY.horizontal_alignment
 
     class TextBody(list):
         """
-        TEXTTYPE [PRESENTATION] [PATHTYPE] [WIDTH] [<strans>] XY STRING {<property>}* ENDEL
+        TEXTTYPE [PRESENTATION] [PATHTYPE] [WIDTH] [<strans>] XY STRING {<property>}*
         """
 
         _TEXTTYPE: records.TEXTTYPE
@@ -853,6 +941,75 @@ class TextElement(Element):
         _PATHTYPE: records.PATHTYPE = None
         _WIDTH: records.WIDTH = None
         _TRANSFORMATION: StructureTransformationElement = None
+
+        def __init__(self,
+                     text: str,
+                     xy: typing.Tuple[int, int],
+                     width: int = 0,
+                     pathtype: int = 0,
+                     datatype: gdstypes.DataType = gdstypes.DataType.NO_DATA_PRESENT):
+            super().__init__()
+            self._TEXTTYPE = records.TEXTTYPE()
+            self._XY = records.XY()
+            self.coordinates = xy
+            self._STRING = records.STRING(text)
+            if width != 0: self._WIDTH = records.WIDTH(width)
+            if pathtype != 0: self._PATHTYPE = records.PATHTYPE(pathtype)
+            if datatype != gdstypes.DataType.NO_DATA_PRESENT: self._DATATYPE = records.DATATYPE(datatype)
+
+        @property
+        def text(self):
+            return self._STRING.text
+
+        @text.setter
+        def text(self, text: str):
+            self._STRING.text = text
+
+        @property
+        def coordinates(self):
+            return self._XY.x[0], self._XY.y[0]
+
+        @coordinates.setter
+        def coordinates(self, value: typing.Tuple[int, int]):
+            x, y = value
+            self._XY.x = np.array([x])
+            self._XY.y = np.array([y])
+
+        @property
+        def pathtype(self):
+            try:
+                return self._PATHTYPE.type
+            except AttributeError:
+                return 0
+
+        @pathtype.setter
+        def pathtype(self, path_type: int):
+            try:
+                self._PATHTYPE.type = path_type
+            except AttributeError:
+                self._PATHTYPE = records.PATHTYPE(path_type)
+
+        @property
+        def width(self):
+            try:
+                return self._WIDTH.width
+            except AttributeError:
+                return 0
+
+        @width.setter
+        def width(self, width: int):
+            try:
+                self._WIDTH.width = width
+            except AttributeError:
+                self._WIDTH = records.WIDTH(width)
+
+        @property
+        def vertical_alignment(self):
+            return self._PRESENTATION.vertical_alignment
+
+        @property
+        def horizontal_alignment(self):
+            return self._PRESENTATION.horizontal_alignment
 
         @classmethod
         def read(cls, reader: Reader) -> TextElement.TextBody:
@@ -900,7 +1057,7 @@ class TextElement(Element):
         self = cls.__new__(cls)
         list.__init__(self)
 
-        self._TEXT = records.Text.read(reader.current)
+        self._TEXT = records.TEXT.read(reader.current)
 
         record = reader.read_next()
         if record.record_type is gdstypes.RecordType.ELFLAGS:
@@ -939,6 +1096,18 @@ class NodeElement(Element):
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
 
+    def __init__(self,
+                 layer: int,
+                 xy: typing.Tuple[int, int],
+                 nodetype: int = 0):
+        super().__init__()
+        self._NODE = records.NODE()
+        self._LAYER = records.LAYER(layer)
+        self._XY = records.XY()
+        self.coordinates = xy
+        if nodetype != 0: self._NODETYPE = records.NODETYPE(nodetype)
+        self._ENDEL = records.ENDEL()
+
     @property
     def layer(self):
         return self._LAYER.layer
@@ -960,11 +1129,10 @@ class NodeElement(Element):
         return self._XY.x, self._XY.y
 
     @coordinates.setter
-    def coordinates(self, value: typing.Tuple[typing.List[int], typing.List[int]]):
-        x, y = value
-        if len(x) != len(y): raise RuntimeError()
-        self._XY.x = x
-        self._XY.y = y
+    def coordinates(self, xy: np.ndarray):
+        if xy.shape[1] != 2: RuntimeError()
+        self._XY.x = xy[:, 0]
+        self._XY.y = xy[:, 1]
 
     @classmethod
     def read(cls, reader: Reader) -> NodeElement:
@@ -1004,13 +1172,25 @@ class BoxElement(Element):
     BOX [ELFLAGS] [PLEX] LAYER BOXTYPE XY {<property>}* ENDEL
     """
 
-    _BOX: records.NODE
+    _BOX: records.BOX
     _LAYER: records.LAYER
     _BOXTYPE: records.BOXTYPE
     _XY: records.XY
 
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
+
+    def __init__(self,
+                 layer: int,
+                 xy: typing.Tuple[int, int],
+                 boxtype: int = 0):
+        super().__init__()
+        self._BOX = records.BOX()
+        self._LAYER = records.LAYER(layer)
+        self._XY = records.XY()
+        self.coordinates = xy
+        if boxtype != 0: self._BOXTYPE = records.BOXTYPE(boxtype)
+        self._ENDEL = records.ENDEL()
 
     @property
     def layer(self):
@@ -1033,11 +1213,10 @@ class BoxElement(Element):
         return self._XY.x.copy(), self._XY.y.copy()
 
     @coordinates.setter
-    def coordinates(self, value: typing.Tuple[typing.List[int], typing.List[int]]):
-        x, y = value
-        if len(x) != len(y) or len(x) != 5 or value[0] != value[-1]: raise RuntimeError()
-        self._XY.x = x
-        self._XY.y = y
+    def coordinates(self, xy: np.ndarray[int]):
+        if xy.shape[1] != 2 or xy.shape[0] != 5 or xy[0, :] != xy[-1, :]: RuntimeError()
+        self._XY.x = xy[:, 0]
+        self._XY.y = xy[:, 1]
 
     @classmethod
     def read(cls, reader: Reader) -> BoxElement:

@@ -134,3 +134,13 @@ class HorizontalAlignment(enum.IntEnum):
     LEFT = 0b0000_00000
     CENTER = 0b0000_0001
     RIGHT = 0b0000_0010
+
+
+@enum.unique
+class Version(enum.Enum):
+    LESS_THAN_THREE = 0
+    THREE = 3
+    FOUR = 4
+    FIVE = 5
+    SIX = 600
+    SEVEN = 7

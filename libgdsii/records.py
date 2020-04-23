@@ -71,15 +71,10 @@ class HEADER(Record):
     record_type = gdstypes.RecordType.HEADER
     data_type = gdstypes.DataType.TWO_BYTE_SIGNED_INTEGER
 
-    version: Version
+    version: gdstypes.Version
 
-    class Version(enum.Enum):
-        LESS_THAN_THREE = 0
-        THREE = 3
-        FOUR = 4
-        FIVE = 5
-        SIX = 600
-        SEVEN = 7
+    def __init__(self, version: gdstypes.Version):
+        self.version = version
 
     @classmethod
     def read(cls, record: library.RawRecord) -> HEADER:
@@ -87,7 +82,7 @@ class HEADER(Record):
         data, = struct.unpack(">h", record.data)
 
         self = cls.__new__(cls)
-        self.version = cls.Version(data)
+        self.version = gdstypes.Version(data)
         return self
 
     def __str__(self):
@@ -97,7 +92,7 @@ class HEADER(Record):
         return struct.pack(">h", self.version.value)
 
 
-class BGBLIB(Record):
+class BGNLIB(Record):
     """
     Contains last modification time of library (two bytes each for year, month, day, hour, minute,and second)
     as well as time of last access (same format) and marks beginning of library.
@@ -108,8 +103,12 @@ class BGBLIB(Record):
     modification_date: utils.DateTime
     access_date: utils.DateTime
 
+    def __init__(self, mod_date: utils.DateTime, acc_date: utils.DateTime):
+        self.modification_date = mod_date
+        self.access_date = acc_date
+
     @classmethod
-    def read(cls, record: library.RawRecord) -> BGBLIB:
+    def read(cls, record: library.RawRecord) -> BGNLIB:
         super().read(record)
         self = cls.__new__(cls)
         self.modification_date = utils.DateTime(*struct.unpack(">6h12x", record.data))
@@ -134,6 +133,9 @@ class LIBNAME(Record):
     data_type = gdstypes.DataType.ASCII_STRING
 
     name: str
+
+    def __init__(self, name: str):
+        self.name = name
 
     @classmethod
     def read(cls, record: library.RawRecord) -> LIBNAME:
@@ -163,6 +165,10 @@ class UNITS(Record):
     logical_unit: float
     physical_unit: float
 
+    def __init__(self, logical_unit: float, physical_unit: float):
+        self.logical_unit = logical_unit
+        self.physical_unit = physical_unit
+
     @classmethod
     def read(cls, record: library.RawRecord) -> UNITS:
         super().read(record)
@@ -189,6 +195,10 @@ class BGNSTR(Record):
 
     modification_date: utils.DateTime
     access_date: utils.DateTime
+
+    def __init__(self, mod_date: utils.DateTime, acc_date: utils.DateTime):
+        self.modification_date = mod_date
+        self.access_date = acc_date
 
     @classmethod
     def read(cls, record: library.RawRecord) -> BGNSTR:
@@ -223,6 +233,9 @@ class STRNAME(Record):
 
     name: str
 
+    def __init__(self, name: str):
+        self.name = name
+
     @classmethod
     def read(cls, record: library.RawRecord) -> STRNAME:
         super().read(record)
@@ -253,6 +266,9 @@ class LAYER(Record):
 
     layer: int
 
+    def __init__(self, layer: int):
+        self.layer = layer
+
     @classmethod
     def read(cls, record: library.RawRecord) -> LAYER:
         super().read(record)
@@ -275,6 +291,9 @@ class DATATYPE(Record):
     data_type = gdstypes.DataType.TWO_BYTE_SIGNED_INTEGER
 
     type: gdstypes.DataType
+
+    def __init__(self, type: gdstypes.DataType):
+        self.type = type
 
     @classmethod
     def read(cls, record: library.RawRecord) -> DATATYPE:
@@ -309,6 +328,10 @@ class XY(Record):
     x: np.ndarray[int]
     y: np.ndarray[int]
 
+    def __init__(self):
+        self.x = np.array([])
+        self.y = np.array(([]))
+
     @classmethod
     def read(cls, record: library.RawRecord) -> XY:
         super().read(record)
@@ -334,6 +357,7 @@ class XY(Record):
         tmp = [None] * 2 * self.x.size
         tmp[::2] = self.x
         tmp[1::2] = self.y
+        tmp = np.array(tmp).astype(np.int32)
         return struct.pack(f">{2 * self.x.size}l", *tmp)
 
 
@@ -360,6 +384,9 @@ class BOXTYPE(Record):
 
     type: int
 
+    def __init__(self, type: int):
+        self.type = type
+
     @classmethod
     def read(cls, record: library.RawRecord) -> BOXTYPE:
         super().read(record)
@@ -374,7 +401,7 @@ class BOXTYPE(Record):
         return struct.pack(">h", self.type)
 
 
-class Text(SimpleRecord):
+class TEXT(SimpleRecord):
     """
     Marks the beginning of a text element.
     """
@@ -510,6 +537,9 @@ class STRING(Record):
 
     text: str
 
+    def __init__(self, text: str):
+        self.text = text
+
     @classmethod
     def read(cls, record: library.RawRecord) -> STRING:
         super().read(record)
@@ -553,6 +583,10 @@ class SNAME(Record):
     data_type = gdstypes.DataType.ASCII_STRING
 
     name: str
+
+    def __init__(self, ref_name: str):
+        self.name = ref_name
+
 
     @classmethod
     def read(cls, record: library.RawRecord) -> SNAME:
@@ -702,6 +736,10 @@ class COLROW(Record):
     n_cols: int
     n_rows: int
 
+    def __init__(self, n_rows: int, n_cols: int):
+        self.n_rows = n_rows
+        self.n_cols = n_cols
+
     @classmethod
     def read(cls, record: library.RawRecord) -> COLROW:
         super().read(record)
@@ -738,6 +776,9 @@ class NODETYPE(Record):
     data_type = gdstypes.DataType.TWO_BYTE_SIGNED_INTEGER
 
     type: int
+
+    def __init__(self, type: int):
+        self.type = type
 
     @classmethod
     def read(cls, record: library.RawRecord) -> NODETYPE:

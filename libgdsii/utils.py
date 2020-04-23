@@ -2,17 +2,10 @@ from __future__ import annotations
 
 import struct
 import numpy as np
+import datetime
 
 
-class DateTime:
-    def __init__(self, year, month, day, hour, minute, second):
-        self.year = year
-        self.month = month
-        self.day = day
-        self.hour = hour
-        self.minute = minute
-        self.second = second
-
+class DateTime(datetime.datetime):
     def __str__(self):
         return f"{self.day}/{self.month}/{self.year} {self.hour}:{self.minute}:{self.second}"
 
