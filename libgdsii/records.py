@@ -849,17 +849,17 @@ class PATHTYPE(Record):
     record_type = gdstypes.RecordType.PATHTYPE
     data_type = gdstypes.DataType.TWO_BYTE_SIGNED_INTEGER
 
-    type: int
+    type: gdstypes.PathType
 
-    def __init__(self, path_type: int):
+    def __init__(self, path_type: gdstypes.PathType):
         self.type = path_type
 
     @classmethod
     def read(cls, record: library.RawRecord) -> PATHTYPE:
         super().read(record)
         self = cls.__new__(cls)
-        self.type, = struct.unpack(">h", record.data)
+        self.type = gdstypes.PathType(struct.unpack(">h", record.data)[0])
         return self
 
     def pack(self) -> bytes:
-        return struct.pack(">h", self.type)
+        return struct.pack(">h", self.type.value)

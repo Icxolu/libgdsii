@@ -422,7 +422,7 @@ class PathElement(Element):
                  layer: int,
                  xy: np.ndarray[int],
                  width: int = 0,
-                 pathtype: int = 0,
+                 pathtype: gdstypes.PathType = gdstypes.PathType.BUTT,
                  datatype: gdstypes.DataType = gdstypes.DataType.NO_DATA_PRESENT):
         super().__init__()
 
@@ -431,7 +431,7 @@ class PathElement(Element):
         self._XY = records.XY()
         self.coordinates = xy
         if width != 0: self._WIDTH = records.WIDTH(width)
-        if pathtype != 0: self._PATHTYPE = records.PATHTYPE(pathtype)
+        if pathtype != gdstypes.PathType.BUTT: self._PATHTYPE = records.PATHTYPE(pathtype)
         self._DATATYPE = records.DATATYPE(datatype)
         self._ENDEL = records.ENDEL()
 
@@ -466,10 +466,10 @@ class PathElement(Element):
         try:
             return self._PATHTYPE.type
         except AttributeError:
-            return 0
+            return gdstypes.PathType.BUTT
 
     @pathtype.setter
-    def pathtype(self, path_type: int):
+    def pathtype(self, path_type: gdstypes.PathType):
         try:
             self._PATHTYPE.type = path_type
         except AttributeError:
@@ -908,7 +908,7 @@ class TextElement(Element):
         return self._TEXTBODY.pathtype
 
     @pathtype.setter
-    def pathtype(self, path_type: int):
+    def pathtype(self, path_type: gdstypes.PathType):
         self._TEXTBODY.pathtype = path_type
 
     @property
@@ -946,7 +946,7 @@ class TextElement(Element):
                      text: str,
                      xy: typing.Tuple[int, int],
                      width: int = 0,
-                     pathtype: int = 0,
+                     pathtype: gdstypes.PathType = gdstypes.PathType.BUTT,
                      datatype: gdstypes.DataType = gdstypes.DataType.NO_DATA_PRESENT):
             super().__init__()
             self._TEXTTYPE = records.TEXTTYPE()
@@ -954,7 +954,7 @@ class TextElement(Element):
             self.coordinates = xy
             self._STRING = records.STRING(text)
             if width != 0: self._WIDTH = records.WIDTH(width)
-            if pathtype != 0: self._PATHTYPE = records.PATHTYPE(pathtype)
+            if pathtype != gdstypes.PathType.BUTT: self._PATHTYPE = records.PATHTYPE(pathtype)
             if datatype != gdstypes.DataType.NO_DATA_PRESENT: self._DATATYPE = records.DATATYPE(datatype)
 
         @property
@@ -980,10 +980,10 @@ class TextElement(Element):
             try:
                 return self._PATHTYPE.type
             except AttributeError:
-                return 0
+                return gdstypes.PathType.BUTT
 
         @pathtype.setter
-        def pathtype(self, path_type: int):
+        def pathtype(self, path_type: gdstypes.PathType):
             try:
                 self._PATHTYPE.type = path_type
             except AttributeError:

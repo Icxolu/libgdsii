@@ -144,3 +144,9 @@ class Version(enum.Enum):
     FIVE = 5
     SIX = 600
     SEVEN = 7
+
+@enum.unique
+class PathType(enum.Enum):
+    BUTT = 0
+    ROUND = 1
+    SQUARE = 2
