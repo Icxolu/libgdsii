@@ -184,6 +184,46 @@ class Library(collections.OrderedDict):
 
         self._ENDLIB.write(stream)
 
+    @property
+    def layers(self):
+        return sorted(set(
+                [element.layer for structure in self.values() for element in structure if hasattr(element, "layer")]
+        ))
+
+    def draw(self, fobj: typing.BinaryIO, scale = 1, options = { }):
+        import cairo
+
+        options["scale"] = scale
+
+        layers: typing.DefaultDict[int, cairo.RecordingSurface] = collections.defaultdict(
+                lambda: cairo.RecordingSurface(cairo.CONTENT_COLOR_ALPHA, None))
+
+        for sname in options.get("structures", self.keys()):
+            structure = self[sname]
+            layers = structure._draw(self, layers, options)
+
+        # for some reason we cant paint these recording surfaces onto another recording surface to
+        # determine the bounds of the whole picture, so we need to do this manually
+
+        draw_surfs = [layers[i] for i in options.get("order", self.layers)]
+        if len(draw_surfs) == 0: return
+
+        dims = np.array([surf.ink_extents() for surf in draw_surfs])
+        dims[:, 2:] += dims[:, :2]
+        x0, y0 = np.min(dims[:, :2], axis = 0)
+        x1, y1 = np.max(dims[:, 2:], axis = 0)
+        w, h = x1 - x0, y1 - y0
+
+        scale = 1
+        with cairo.PDFSurface(fobj, scale * w, scale * h) as surf:
+            ctx = cairo.Context(surf)
+            ctx.translate(0, scale * h)
+            ctx.scale(scale, -scale)
+
+            for layer_surf in draw_surfs:
+                ctx.set_source_surface(layer_surf, -x0, -y0)
+                ctx.paint()
+
 
 class Structure(list):
     """
@@ -285,6 +325,12 @@ class Structure(list):
 
         self._ENDSTR.write(stream)
 
+    def _draw(self, lib, layers, options):
+        for element in self:
+            layers = element._draw(lib, layers, options)
+
+        return layers
+
 
 class Element(list):
     """
@@ -315,6 +361,10 @@ class Element(list):
             prop.write(stream)
 
         self._ENDEL.write(stream)
+
+
+    def _draw(self, lib, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        raise NotImplementedError()
 
 
 class BoundaryElement(Element):
@@ -399,6 +449,35 @@ class BoundaryElement(Element):
         self._DATATYPE.write(stream)
         self._XY.write(stream)
         super().write(stream)
+
+    def _draw(self, lib: Library, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        import cairo
+        scale = options["scale"]
+
+        X, Y = self.coordinates
+        X = X * lib.logical_unit * scale
+        Y = Y * lib.logical_unit * scale
+
+        surf = layers[self.layer]
+        ctx = cairo.Context(surf)
+        ctx.save()
+        ctx = utils._parse_line_width(options, ctx, self.layer)
+
+        ctx.translate(*shift)
+        ctx.move_to(X[0], Y[0])
+        for x, y in zip(X[1:], Y[1:]):
+            ctx.line_to(x, y)
+
+        ctx.close_path()
+        ctx = utils._parse_fill_color(options, ctx, self.layer)
+        ctx = utils._parse_pattern(options, ctx, self.layer)
+        ctx.fill_preserve()
+
+        ctx = utils._parse_stroke_color(options, ctx, self.layer)
+        ctx.stroke()
+
+        ctx.restore()
+        return layers
 
 
 class PathElement(Element):
@@ -544,6 +623,37 @@ class PathElement(Element):
         self._XY.write(stream)
         super().write(stream)
 
+    def _draw(self, lib, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        import cairo
+        scale = options["scale"]
+
+        X, Y = self.coordinates
+        X = X * lib.logical_unit * scale
+        Y = Y * lib.logical_unit * scale
+
+        surf = layers[self.layer]
+        ctx = cairo.Context(surf)
+        ctx.save()
+        ctx.set_line_width(self.width * lib.logical_unit * scale)
+
+        ctx.translate(*shift)
+        ctx.move_to(X[0], Y[0])
+        for x, y in zip(X[1:], Y[1:]):
+            ctx.line_to(x, y)
+
+        if self.pathtype == gdstypes.PathType.BUTT:
+            ctx.set_line_cap(cairo.LINE_CAP_BUTT)
+        elif self.pathtype == gdstypes.PathType.ROUND:
+            ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+        elif self.pathtype == gdstypes.PathType.SQUARE:
+            ctx.set_line_cap(cairo.LINE_CAP_SQUARE)
+
+        ctx = utils._parse_stroke_color(options, ctx, self.layer)
+        ctx.stroke()
+
+        ctx.restore()
+        return layers
+
 
 class RaithCircleElement(Element):
     """
@@ -683,6 +793,37 @@ class RaithCircleElement(Element):
         self._XY.write(stream)
         super().write(stream)
 
+    def _draw(self, lib: Library, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        import cairo
+        scale = options["scale"]
+
+        x, y = self.center
+        x *= lib.logical_unit * scale
+        y *= lib.logical_unit * scale
+
+        x += shift[0]
+        y += shift[1]
+
+        surf = layers[self.layer]
+        ctx = cairo.Context(surf)
+        ctx.save()
+        ctx.translate(*shift)
+        ctx = utils._parse_line_width(options, ctx, self.layer)
+
+        if not (self.is_ellipse or self.is_arc):
+            ctx.arc(x, y, self.radii[0] * lib.logical_unit * scale, 0, 2 * np.pi)
+
+        if self.is_filled:
+            ctx = utils._parse_fill_color(options, ctx, self.layer)
+            ctx = utils._parse_pattern(options, ctx, self.layer)
+            ctx.fill_preserve()
+
+        ctx = utils._parse_stroke_color(options, ctx, self.layer)
+        ctx.stroke()
+
+        ctx.restore()
+        return layers
+
 
 class StructureReferenceElement(Element):
     """
@@ -759,6 +900,20 @@ class StructureReferenceElement(Element):
         self._TRANSFORMATION.write(stream) if self._TRANSFORMATION is not None else None
         self._XY.write(stream)
         super().write(stream)
+
+    def _draw(self, lib, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        scale = options["scale"]
+        x, y = self.coordinates
+        x = x * lib.logical_unit * scale
+        y = y * lib.logical_unit * scale
+
+        x += shift[0]
+        y += shift[1]
+        structure = lib[self.ref_name]
+        for element in structure:
+            layers = element._draw(lib, layers, options, (x, y))
+
+        return layers
 
 
 class ArrayReferenceElement(Element):
@@ -854,6 +1009,29 @@ class ArrayReferenceElement(Element):
         self._COLROW.write(stream)
         self._XY.write(stream)
         super().write(stream)
+
+    def _draw(self, lib, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        scale = options["scale"]
+        x, y = self.coordinates
+        x = x * lib.logical_unit * scale
+        y = y * lib.logical_unit * scale
+
+        x += shift[0]
+        y += shift[1]
+        n_rows, n_cols = self.dimensions
+        structure = lib[self.ref_name]
+
+        ref = np.array([x[0], y[0]])
+        row_spacing = np.array([x[2] - x[0], y[2] - y[0]]) // n_rows
+        col_spacing = np.array([x[1] - x[0], y[1] - y[0]]) // n_cols
+
+        for i in range(n_rows):
+            for j in range(n_cols):
+                for element in structure:
+                    shift = ref + i * row_spacing + j * col_spacing
+                    layers = element._draw(lib, layers, options, (shift[0], shift[1]))
+
+        return layers
 
 
 class TextElement(Element):
@@ -1082,6 +1260,41 @@ class TextElement(Element):
         self._TEXTBODY.write(stream)
         super().write(stream)
 
+    def _draw(self, lib, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        import cairo
+        scale = options["scale"]
+
+        x, y = self.coordinates
+        x = x * lib.logical_unit * scale
+        y = y * lib.logical_unit * scale
+
+        surf = layers[self.layer]
+        ctx = cairo.Context(surf)
+        ctx.save()
+        utils._parse_font_size(options, ctx, self.layer)
+
+        ctx.scale(1, -1)
+        ctx.translate(*shift)
+        ctx.move_to(x, -y)
+
+        _, _, w, h, _, _ = ctx.text_extents(self.text)
+        ctx.rel_move_to(-w / 2, -h / 2)
+
+        if self.vertical_alignment == gdstypes.VerticalAlignment.TOP:
+            ctx.rel_move_to(0, h / 2)
+        elif self.vertical_alignment == gdstypes.VerticalAlignment.BOTTOM:
+            ctx.rel_move_to(0, -h / 2)
+
+        if self.horizontal_alignment == gdstypes.HorizontalAlignment.LEFT:
+            ctx.rel_move_to(w / 2, 0)
+        elif self.horizontal_alignment == gdstypes.HorizontalAlignment.RIGHT:
+            ctx.rel_move_to(-w / 2, 0)
+
+        ctx.show_text(self.text)
+
+        ctx.restore()
+        return layers
+
 
 class NodeElement(Element):
     """
@@ -1249,6 +1462,35 @@ class BoxElement(Element):
         self._BOXTYPE.write(stream)
         self._XY.write(stream)
         super().write(stream)
+
+    def _draw(self, lib, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
+        import cairo
+        scale = options["scale"]
+
+        X, Y = self.coordinates
+        X = X * lib.logical_unit * scale
+        Y = Y * lib.logical_unit * scale
+
+        surf = layers[self.layer]
+        ctx = cairo.Context(surf)
+        ctx.save()
+        utils._parse_line_width(options, ctx, self.layer)
+
+        ctx.translate(*shift)
+        ctx.move_to(X[0], Y[0])
+        for x, y in zip(X[1:], Y[1:]):
+            ctx.line_to(x, y)
+
+        ctx.close_path()
+        ctx = utils._parse_fill_color(options, ctx, self.layer)
+        ctx = utils._parse_pattern(options, ctx, self.layer)
+        ctx.fill_preserve()
+
+        ctx = utils._parse_stroke_color(options, ctx, self.layer)
+        ctx.stroke()
+
+        ctx.restore()
+        return layers
 
 
 class StructureTransformationElement:
