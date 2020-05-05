@@ -9,5 +9,7 @@ setup(
         license = '',
         author = '',
         author_email = '',
-        description = 'Library for parsing gds layout files'
+        description = 'Library for parsing gds layout files',
+        install_requires=["numpy"],
+        extras_require={"draw": ["pycairo"]}
 )
