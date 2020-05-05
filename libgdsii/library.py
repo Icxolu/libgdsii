@@ -291,21 +291,21 @@ class Structure(list):
 
         for record in reader:
             if reader.current.record_type is gdstypes.RecordType.BOUNDARY:
-                self.append(BoundaryElement.read(reader))
+                self.append(Boundary.read(reader))
             elif reader.current.record_type is gdstypes.RecordType.PATH:
-                self.append(PathElement.read(reader))
+                self.append(Path.read(reader))
             elif reader.current.record_type is gdstypes.RecordType.SREF:
-                self.append(StructureReferenceElement.read(reader))
+                self.append(StructureReference.read(reader))
             elif reader.current.record_type is gdstypes.RecordType.AREF:
-                self.append(ArrayReferenceElement.read(reader))
+                self.append(ArrayReference.read(reader))
             elif reader.current.record_type is gdstypes.RecordType.TEXT:
-                self.append(TextElement.read(reader))
+                self.append(Text.read(reader))
             elif reader.current.record_type is gdstypes.RecordType.NODE:
-                self.append(NodeElement.read(reader))
+                self.append(Node.read(reader))
             elif reader.current.record_type is gdstypes.RecordType.BOX:
-                self.append(BoxElement.read(reader))
+                self.append(Box.read(reader))
             elif reader.current.record_type is gdstypes.RecordType.RAITHCIRCLE:
-                self.append(RaithCircleElement.read(reader))
+                self.append(RaithCircle.read(reader))
             elif record.record_type is gdstypes.RecordType.ENDSTR:
                 self._ENDSTR = records.ENDSTR.read(record)
                 break
@@ -362,12 +362,11 @@ class Element(list):
 
         self._ENDEL.write(stream)
 
-
     def _draw(self, lib, layers, options, shift: typing.Tuple[int, int] = (0, 0)):
         raise NotImplementedError()
 
 
-class BoundaryElement(Element):
+class Boundary(Element):
     """
     BOUNDARY [ELFLAGS] [PLEX] LAYER DATATYPE XY {<property>}* ENDEL
     """
@@ -419,7 +418,7 @@ class BoundaryElement(Element):
         self._XY.y = xy[:, 1].copy()
 
     @classmethod
-    def read(cls, reader: Reader) -> BoundaryElement:
+    def read(cls, reader: Reader) -> Boundary:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -480,7 +479,7 @@ class BoundaryElement(Element):
         return layers
 
 
-class PathElement(Element):
+class Path(Element):
     """
     PATH [ELFLAGS] [PLEX] LAYER DATATYPE [PATHTYPE] [WIDTH] [BGNEXTN] [ENDEXTN] XY {<property>}* ENDEL
     """
@@ -570,7 +569,7 @@ class PathElement(Element):
             self._WIDTH = records.WIDTH(width)
 
     @classmethod
-    def read(cls, reader: Reader) -> PathElement:
+    def read(cls, reader: Reader) -> Path:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -655,7 +654,7 @@ class PathElement(Element):
         return layers
 
 
-class RaithCircleElement(Element):
+class RaithCircle(Element):
     """
     PATH LAYER DATATYPE [WIDTH] XY {<property>}* ENDEL
     """
@@ -755,7 +754,7 @@ class RaithCircleElement(Element):
         return bool(self._XY.y[3] & 1 << 2)
 
     @classmethod
-    def read(cls, reader: Reader) -> RaithCircleElement:
+    def read(cls, reader: Reader) -> RaithCircle:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -825,7 +824,7 @@ class RaithCircleElement(Element):
         return layers
 
 
-class StructureReferenceElement(Element):
+class StructureReference(Element):
     """
     SREF [ELFLAGS] [PLEX] SNAME [<strans>] XY {<property>}* ENDEL
     """
@@ -836,7 +835,7 @@ class StructureReferenceElement(Element):
 
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
-    _TRANSFORMATION: StructureTransformationElement = None
+    _TRANSFORMATION: StructureTransformation = None
 
     def __init__(self,
                  refname: str,
@@ -866,7 +865,7 @@ class StructureReferenceElement(Element):
         self._XY.y = [y]
 
     @classmethod
-    def read(cls, reader: Reader) -> StructureReferenceElement:
+    def read(cls, reader: Reader) -> StructureReference:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -885,7 +884,7 @@ class StructureReferenceElement(Element):
 
         record = reader.read_next()
         if record.record_type is gdstypes.RecordType.STRANS:
-            self._TRANSFORMATION = StructureTransformationElement.read(reader)
+            self._TRANSFORMATION = StructureTransformation.read(reader)
 
         self._XY = records.XY.read(reader.current)
         self._read_properties(reader)
@@ -916,7 +915,7 @@ class StructureReferenceElement(Element):
         return layers
 
 
-class ArrayReferenceElement(Element):
+class ArrayReference(Element):
     """
     AREF [ELFLAGS] [PLEX] SNAME [<strans>] COLROW XY {<property>}* ENDEL
     """
@@ -928,7 +927,7 @@ class ArrayReferenceElement(Element):
 
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
-    _TRANSFORMATION: StructureTransformationElement = None
+    _TRANSFORMATION: StructureTransformation = None
 
     def __init__(self,
                  refname: str,
@@ -941,7 +940,8 @@ class ArrayReferenceElement(Element):
         self._SNAME = records.SNAME(refname)
         self._COLROW = records.COLROW(*dimensions)
         self._XY = records.XY()
-        self.coordinates = np.c_[reference_point, np.array(col_spacing) * dimensions[1], np.array(row_spacing) * dimensions[0]].T
+        self.coordinates = np.c_[
+            reference_point, np.array(col_spacing) * dimensions[1], np.array(row_spacing) * dimensions[0]].T
         self._ENDEL = records.ENDEL()
 
     @property
@@ -973,7 +973,7 @@ class ArrayReferenceElement(Element):
         self._COLROW.n_cols = cols
 
     @classmethod
-    def read(cls, reader: Reader) -> ArrayReferenceElement:
+    def read(cls, reader: Reader) -> ArrayReference:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -992,7 +992,7 @@ class ArrayReferenceElement(Element):
 
         record = reader.read_next()
         if record.record_type is gdstypes.RecordType.STRANS:
-            self._TRANSFORMATION = StructureTransformationElement.read(reader)
+            self._TRANSFORMATION = StructureTransformation.read(reader)
 
         self._COLROW = records.COLROW.read(reader.current)
         self._XY = records.XY.read(reader.read_next())
@@ -1034,14 +1034,14 @@ class ArrayReferenceElement(Element):
         return layers
 
 
-class TextElement(Element):
+class Text(Element):
     """
     TEXT [ELFLAGS] [PLEX] LAYER <textbody> ENDEL
     """
 
     _TEXT: records.TEXT
     _LAYER: records.LAYER
-    _TEXTBODY: TextElement.TextBody
+    _TEXTBODY: Text.TextBody
 
     _ELFLAGS: records.ELFLAGS = None
     _PLEX: records.PLEX = None
@@ -1054,7 +1054,7 @@ class TextElement(Element):
         super().__init__()
         self._TEXT = records.TEXT()
         self._LAYER = records.LAYER(layer)
-        self._TEXTBODY = TextElement.TextBody(text, xy)
+        self._TEXTBODY = Text.TextBody(text, xy)
         self._ENDEL = records.ENDEL()
 
     @property
@@ -1118,7 +1118,7 @@ class TextElement(Element):
         _PRESENTATION: records.PRESENTATION = None
         _PATHTYPE: records.PATHTYPE = None
         _WIDTH: records.WIDTH = None
-        _TRANSFORMATION: StructureTransformationElement = None
+        _TRANSFORMATION: StructureTransformation = None
 
         def __init__(self,
                      text: str,
@@ -1190,7 +1190,7 @@ class TextElement(Element):
             return self._PRESENTATION.horizontal_alignment
 
         @classmethod
-        def read(cls, reader: Reader) -> TextElement.TextBody:
+        def read(cls, reader: Reader) -> Text.TextBody:
             self = cls.__new__(cls)
             list.__init__(self)
 
@@ -1214,7 +1214,7 @@ class TextElement(Element):
                 record = reader.read_next()
 
             if record.record_type is gdstypes.RecordType.STRANS:
-                self._TRANSFORMATION = StructureTransformationElement.read(reader)
+                self._TRANSFORMATION = StructureTransformation.read(reader)
 
             self._XY = records.XY.read(reader.current)
             self._STRING = records.STRING.read(reader.read_next())
@@ -1231,7 +1231,7 @@ class TextElement(Element):
             self._STRING.write(stream)
 
     @classmethod
-    def read(cls, reader: Reader) -> TextElement:
+    def read(cls, reader: Reader) -> Text:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -1247,7 +1247,7 @@ class TextElement(Element):
             record = reader.read_next()
 
         self._LAYER = records.LAYER.read(record)
-        self._TEXTBODY = TextElement.TextBody.read(reader)
+        self._TEXTBODY = Text.TextBody.read(reader)
         self._read_properties(reader)
 
         return self
@@ -1296,7 +1296,7 @@ class TextElement(Element):
         return layers
 
 
-class NodeElement(Element):
+class Node(Element):
     """
     NODE [ELFLAGS] [PLEX] LAYER NODETYPE XY {<property>}* ENDEL
     """
@@ -1348,7 +1348,7 @@ class NodeElement(Element):
         self._XY.y = xy[:, 1]
 
     @classmethod
-    def read(cls, reader: Reader) -> NodeElement:
+    def read(cls, reader: Reader) -> Node:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -1380,7 +1380,7 @@ class NodeElement(Element):
         super().write(stream)
 
 
-class BoxElement(Element):
+class Box(Element):
     """
     BOX [ELFLAGS] [PLEX] LAYER BOXTYPE XY {<property>}* ENDEL
     """
@@ -1432,7 +1432,7 @@ class BoxElement(Element):
         self._XY.y = xy[:, 1]
 
     @classmethod
-    def read(cls, reader: Reader) -> BoxElement:
+    def read(cls, reader: Reader) -> Box:
         self = cls.__new__(cls)
         list.__init__(self)
 
@@ -1493,7 +1493,7 @@ class BoxElement(Element):
         return layers
 
 
-class StructureTransformationElement:
+class StructureTransformation:
     """
     STRANS [MAG] [ANGLE]
     """
@@ -1556,7 +1556,7 @@ class StructureTransformationElement:
             self._ANGLE = records.ANGLE(factor)
 
     @classmethod
-    def read(cls, reader: Reader) -> StructureTransformationElement:
+    def read(cls, reader: Reader) -> StructureTransformation:
         self = cls.__new__(cls)
 
         self._STRANS = records.STRANS.read(reader.current)

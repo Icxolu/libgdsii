@@ -52,22 +52,22 @@ class GDSMetapostConverter:
                 self._parse_element(element)
 
     def _parse_element(self, element: libgdsii.Element, shift: typing.Tuple[int, int] = (0, 0)):
-        if type(element) is libgdsii.BoundaryElement:
+        if type(element) is libgdsii.Boundary:
             self._draw_boundary(element, shift)
-        elif type(element) is libgdsii.PathElement:
+        elif type(element) is libgdsii.Path:
             self._draw_path(element, shift)
-        elif type(element) is libgdsii.RaithCircleElement:
+        elif type(element) is libgdsii.RaithCircle:
             self._draw_raith_circle(element, shift)
-        elif type(element) is libgdsii.TextElement:
+        elif type(element) is libgdsii.Text:
             self._draw_text(element, shift)
-        elif type(element) is libgdsii.StructureReferenceElement:
+        elif type(element) is libgdsii.StructureReference:
             self._draw_reference_structure(element, shift)
-        elif type(element) is libgdsii.ArrayReferenceElement:
+        elif type(element) is libgdsii.ArrayReference:
             self._draw_array_reference(element, shift)
         else:
             print(type(element))
 
-    def _draw_boundary(self, element: libgdsii.BoundaryElement, shift: typing.Tuple[int, int]):
+    def _draw_boundary(self, element: libgdsii.Boundary, shift: typing.Tuple[int, int]):
         X, Y = element.coordinates
         X += shift[0]
         Y += shift[1]
@@ -79,14 +79,14 @@ class GDSMetapostConverter:
         except KeyError:
             self._layers[element.layer] = fill + draw
 
-    def _draw_box(self, element: libgdsii.BoxElement, shift: typing.Tuple[int, int]):
+    def _draw_box(self, element: libgdsii.Box, shift: typing.Tuple[int, int]):
         X, Y = element.coordinates
         X += shift[0]
         Y += shift[1]
         txt = " -- ".join([f"({x / self.tmp}u, {y / self.tmp}u)" for x, y in zip(X, Y)])
         txt = "draw " + txt + " -- cycle;"
 
-    def _draw_path(self, element: libgdsii.PathElement, shift: typing.Tuple[int, int]):
+    def _draw_path(self, element: libgdsii.Path, shift: typing.Tuple[int, int]):
         X, Y = element.coordinates
         X += shift[0]
         Y += shift[1]
@@ -97,7 +97,7 @@ class GDSMetapostConverter:
         except KeyError:
             self._layers[element.layer] = txt
 
-    def _draw_text(self, element: libgdsii.TextElement, shift: typing.Tuple[int, int]):
+    def _draw_text(self, element: libgdsii.Text, shift: typing.Tuple[int, int]):
         x, y = element.coordinates
         x += shift[0]
         y += shift[1]
@@ -127,7 +127,7 @@ class GDSMetapostConverter:
         except KeyError:
             self._layers[element.layer] = txt
 
-    def _draw_raith_circle(self, element: libgdsii.RaithCircleElement, shift: typing.Tuple[int, int]):
+    def _draw_raith_circle(self, element: libgdsii.RaithCircle, shift: typing.Tuple[int, int]):
         x, y = element.center
         x += shift[0]
         y += shift[1]
@@ -149,7 +149,7 @@ class GDSMetapostConverter:
         except KeyError:
             self._layers[element.layer] = fill + draw
 
-    def _draw_reference_structure(self, element: libgdsii.StructureReferenceElement, shift: typing.Tuple[int, int]):
+    def _draw_reference_structure(self, element: libgdsii.StructureReference, shift: typing.Tuple[int, int]):
         x, y = element.coordinates
         x += shift[0]
         y += shift[1]
@@ -158,7 +158,7 @@ class GDSMetapostConverter:
         for element in structure:
             self._parse_element(element, (x, y))
 
-    def _draw_array_reference(self, element: libgdsii.ArrayReferenceElement, shift: typing.Tuple[int, int]):
+    def _draw_array_reference(self, element: libgdsii.ArrayReference, shift: typing.Tuple[int, int]):
         x, y = element.coordinates
         x += shift[0]
         y += shift[1]
